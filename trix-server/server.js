@@ -43,6 +43,28 @@ function writeJsonAtomic(filePath, data) {
 }
 
 ensureFile(USERS_PATH, {});
+// --- migrate old users.json format -> new (password -> salt/password_hash)
+(function migrateUsersIfNeeded() {
+  const users = readJson(USERS_PATH, {});
+  let changed = false;
+
+  for (const [name, u] of Object.entries(users)) {
+    if (u && u.password && !u.password_hash) {
+      const salt = newSaltHex();
+      const password_hash = hashPassword(String(u.password), salt);
+      users[name] = {
+        username: name,
+        salt,
+        password_hash,
+        created_at: u.created_at || Date.now(),
+      };
+      changed = true;
+    }
+  }
+
+  if (changed) writeJsonAtomic(USERS_PATH, users);
+})();
+
 ensureFile(MSG_PATH, []);
 
 // ---------- password hashing ----------
