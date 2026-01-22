@@ -1,0 +1,99 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+#container {
+  display: flex;
+  height: 100vh;
+}
+
+#sidebar {
+  width: 200px;
+  background-color: #1a0000;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-btn {
+  padding: 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #8b0000;
+}
+
+.chat-btn:hover {
+  background-color: #8b0000;
+}
+
+#main-panel {
+  flex: 1;
+  background-color: #111111;
+  display: flex;
+  flex-direction: column;
+}
+
+#chat-header {
+  background-color: #1a0000;
+  color: white;
+  padding: 15px;
+  font-weight: bold;
+}
+
+#messages {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  color: white;
+}
+
+.message {
+  margin: 5px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+.message.me {
+  background-color: #2a0000;
+  align-self: flex-end;
+}
+
+.message.bot {
+  background-color: #333333;
+  align-self: flex-start;
+}
+
+#input-area {
+  display: flex;
+  padding: 10px;
+  background-color: #111111;
+}
+
+#message-input {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  margin-right: 10px;
+  background-color: #222222;
+  color: white;
+}
+
+#message-input:focus {
+  outline: none;
+}
+
+#input-area button {
+  padding: 10px 20px;
+  background-color: #1a0000;
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#input-area button:hover {
+  background-color: #8b0000;
+}
