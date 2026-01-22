@@ -2,11 +2,12 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TRIX Messenger</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+
+<body class="dark">
 
 <!-- LOGIN -->
 <div id="loginScreen" class="login-screen">
@@ -30,265 +31,91 @@
 
   <!-- SIDEBAR -->
   <div class="sidebar">
+
     <!-- TOP BAR -->
     <div class="top-bar">
-      <button id="menuBtn" class="icon-btn" title="Меню" aria-label="Меню">
-        <!-- hamburger -->
-        <svg viewBox="0 0 24 24" class="icon"><path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-
+      <button id="menuBtn" class="menu-btn">☰</button>
       <div class="profile-mini">
-        <div class="avatar" id="avatarMini">T</div>
-        <div class="profile-mini-text">
+        <div class="avatar">T</div>
+        <div>
           <div id="profileName">User</div>
           <div id="profileUsername" class="username">@username</div>
         </div>
       </div>
     </div>
 
-    <!-- SEARCH + NEW CHAT -->
-    <div class="sidebar-row">
-      <input type="text" id="chatSearch" class="chat-search" placeholder="Поиск" />
-      <button id="newChatBtn" class="icon-btn primary" title="Новый чат" aria-label="Новый чат">
-        <!-- plus -->
-        <svg viewBox="0 0 24 24" class="icon"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
+    <input type="text" id="chatSearch" class="chat-search" placeholder="Поиск" />
+
+    <div id="chatList">
+      <div class="chat active" data-chat="TRIX Bot">
+        <div class="chat-title">TRIX Bot</div>
+        <div class="chat-last" id="last-TRIX Bot">—</div>
+        <span class="unread-badge">0</span>
+      </div>
     </div>
 
-    <div id="chatList" class="chat-list"></div>
   </div>
 
   <!-- CHAT -->
   <div class="chat-area" id="chatArea">
     <div class="chat-header" id="chatHeader">TRIX Bot</div>
-
     <div class="messages" id="messages"></div>
 
     <div class="input-area">
       <textarea id="msgInput" placeholder="Сообщение"></textarea>
-      <button id="sendBtn" class="send-btn" title="Отправить" aria-label="Отправить">➤</button>
+      <button id="sendBtn">➤</button>
     </div>
   </div>
+
 </div>
 
 <!-- SIDE MENU -->
 <div id="sideMenu" class="side-menu">
-  <div class="menu-item" id="openProfile">
-    <span class="mi-left">
-      <svg viewBox="0 0 24 24" class="mi-icon"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z" fill="currentColor"/></svg>
-      <span id="menuProfileText">Профиль</span>
-    </span>
-    <svg viewBox="0 0 24 24" class="mi-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </div>
-
-  <div class="menu-item" id="openSettings">
-    <span class="mi-left">
-      <svg viewBox="0 0 24 24" class="mi-icon"><path d="M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4Zm9 4a7.8 7.8 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1l-.3-2.6H10.5L10.2 6a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.3 2.6h3.9l.3-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6a7.8 7.8 0 0 0 .1-1Z" fill="currentColor"/></svg>
-      <span id="menuSettingsText">Настройки</span>
-    </span>
-    <svg viewBox="0 0 24 24" class="mi-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </div>
-
-  <div class="menu-item danger" id="logoutBtn">
-    <span class="mi-left">
-      <svg viewBox="0 0 24 24" class="mi-icon"><path d="M10 17l1.4-1.4L9.8 14H20v-2H9.8l1.6-1.6L10 9l-5 5 5 5ZM4 4h8V2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8v-2H4Z" fill="currentColor"/></svg>
-      <span id="menuLogoutText">Выйти</span>
-    </span>
-  </div>
+  <div class="menu-item" id="openProfile">Профиль</div>
+  <div class="menu-item" id="openSettings">Настройки</div>
+  <div class="menu-item danger" id="logoutBtn">Выйти</div>
 </div>
 
 <!-- PROFILE MODAL -->
 <div id="profileModal" class="modal">
   <div class="modal-box">
-    <div class="modal-top">
-      <h3 id="profileTitle">Профиль</h3>
-      <button class="icon-btn" onclick="closeProfile()" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" class="icon"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-
-    <div class="profile-card">
-      <div class="avatar big" id="avatarBig">T</div>
-      <div class="profile-lines">
-        <div class="profile-line"><span class="muted">Имя:</span> <span id="profileInfoName">—</span></div>
-        <div class="profile-line"><span class="muted">Username:</span> <span id="profileInfoUsername">—</span></div>
-      </div>
-
-      <label class="file-btn">
-        <input id="avatarFile" type="file" accept="image/*" />
-        <span id="avatarUploadText">Загрузить аватар</span>
-      </label>
-    </div>
+    <h3 id="profileTitle">Профиль</h3>
+    <div class="avatar big">T</div>
+    <p id="profileInfo"></p>
+    <button id="profileCloseBtn" onclick="closeProfile()">Закрыть</button>
   </div>
 </div>
 
-<!-- SETTINGS MODAL (Telegram-like) -->
+<!-- SETTINGS MODAL -->
 <div id="settingsModal" class="modal">
-  <div class="modal-box settings-box">
-
-    <!-- SETTINGS LIST -->
-    <div id="settingsScreenMain">
-      <div class="modal-top">
-        <h3 id="settingsTitle">Настройки</h3>
-        <button class="icon-btn" onclick="closeSettings()" aria-label="Закрыть">
-          <svg viewBox="0 0 24 24" class="icon"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <button id="notifBtn">Включить уведомления</button>
-
-
-      <div class="settings-list">
-        <button class="settings-item" id="goTheme">
-          <span class="si-left">
-            <svg viewBox="0 0 24 24" class="si-icon"><path d="M12 3a9 9 0 1 0 9 9A7 7 0 0 1 12 3Z" fill="currentColor"/></svg>
-            <span id="siThemeText">Тема</span>
-          </span>
-          <span class="si-right">
-            <span class="si-value" id="themeValue">Тёмная</span>
-            <svg viewBox="0 0 24 24" class="si-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </button>
-
-        <button class="settings-item" id="goLang">
-          <span class="si-left">
-            <svg viewBox="0 0 24 24" class="si-icon"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm7.9 9h-3.2a15.5 15.5 0 0 0-1.2-5A8 8 0 0 1 19.9 11ZM12 4c1.1 1.5 1.9 4 2.2 7H9.8c.3-3 1.1-5.5 2.2-7Zm-3.5 2a15.5 15.5 0 0 0-1.2 5H4.1A8 8 0 0 1 8.5 6ZM4.1 13h3.2a15.5 15.5 0 0 0 1.2 5A8 8 0 0 1 4.1 13Zm5.7 0h4.4c-.3 3-1.1 5.5-2.2 7-1.1-1.5-1.9-4-2.2-7Zm5.7 5a15.5 15.5 0 0 0 1.2-5h3.2a8 8 0 0 1-4.4 5Z" fill="currentColor"/></svg>
-            <span id="siLangText">Язык</span>
-          </span>
-          <span class="si-right">
-            <span class="si-value" id="langValue">Русский</span>
-            <svg viewBox="0 0 24 24" class="si-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </button>
-
-        <button class="settings-item" id="goUsername">
-          <span class="si-left">
-            <svg viewBox="0 0 24 24" class="si-icon"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5h-2v2h2V7Zm-1 4a4 4 0 0 0-4 4H6a6 6 0 0 1 12 0h-2a4 4 0 0 0-4-4Z" fill="currentColor"/></svg>
-            <span id="siUsernameText">Username</span>
-          </span>
-          <span class="si-right">
-            <span class="si-value" id="usernameValue">@username</span>
-            <svg viewBox="0 0 24 24" class="si-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </button>
-
-        <button class="settings-item" id="goAbout">
-          <span class="si-left">
-            <svg viewBox="0 0 24 24" class="si-icon"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 4a1.2 1.2 0 1 1-1.2 1.2A1.2 1.2 0 0 1 12 6Zm1.5 13h-3v-2h1v-5h-1V10h3v7h1Z" fill="currentColor"/></svg>
-            <span id="siAboutText">О приложении</span>
-          </span>
-          <span class="si-right">
-            <svg viewBox="0 0 24 24" class="si-chevron"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </button>
-      </div>
-    </div>
-
-    <!-- THEME SCREEN -->
-    <div id="settingsScreenTheme" class="settings-subscreen hidden">
-      <div class="modal-top">
-        <button class="icon-btn" id="backFromTheme" aria-label="Назад">
-          <svg viewBox="0 0 24 24" class="icon"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <h3 id="themeTitle">Тема</h3>
-        <span></span>
-      </div>
-
-      <div class="settings-panel">
-        <button class="radio-row" id="setThemeDark">
-          <span class="radio-dot" id="dotDark"></span>
-          <span id="themeDarkText">Тёмная</span>
-        </button>
-        <button class="radio-row" id="setThemeLight">
-          <span class="radio-dot" id="dotLight"></span>
-          <span id="themeLightText">Светлая</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- LANG SCREEN -->
-    <div id="settingsScreenLang" class="settings-subscreen hidden">
-      <div class="modal-top">
-        <button class="icon-btn" id="backFromLang" aria-label="Назад">
-          <svg viewBox="0 0 24 24" class="icon"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <h3 id="langTitle">Язык</h3>
-        <span></span>
-      </div>
-
-      <div class="settings-panel">
-        <button class="radio-row" id="setLangRu">
-          <span class="radio-dot" id="dotRu"></span>
-          <span>Русский</span>
-        </button>
-        <button class="radio-row" id="setLangEn">
-          <span class="radio-dot" id="dotEn"></span>
-          <span>English</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- USERNAME SCREEN -->
-    <div id="settingsScreenUsername" class="settings-subscreen hidden">
-      <div class="modal-top">
-        <button class="icon-btn" id="backFromUsername" aria-label="Назад">
-          <svg viewBox="0 0 24 24" class="icon"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <h3 id="usernameTitle">Username</h3>
-        <span></span>
-      </div>
-
-      <div class="settings-panel">
-        <div class="hint" id="usernameHint">Можно сменить @username на новый</div>
-        <input id="newUsernameInput" class="settings-input" placeholder="@new_username" />
-        <button id="changeUsernameBtn" class="primary-btn">Сменить username</button>
-      </div>
-    </div>
-
-    <!-- ABOUT SCREEN -->
-    <div id="settingsScreenAbout" class="settings-subscreen hidden">
-      <div class="modal-top">
-        <button class="icon-btn" id="backFromAbout" aria-label="Назад">
-          <svg viewBox="0 0 24 24" class="icon"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <h3 id="aboutTitle">О приложении</h3>
-        <span></span>
-      </div>
-
-      <div class="settings-panel">
-        <div class="about-card">
-          <div class="about-row"><span class="muted">Название:</span> <b>TRIX</b></div>
-          <div class="about-row"><span class="muted">Версия:</span> <b id="appVersion">0.1</b></div>
-          <div class="about-row"><span class="muted">Сборка:</span> <b id="buildInfo">local</b></div>
-          <div class="about-row"><span class="muted">Кэш:</span> <b id="cacheInfo">включён</b></div>
-          <div class="hint" style="margin-top:10px">
-            TRIX — учебный мессенджер. Сообщения хранятся на локальном сервере.
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- NEW CHAT MODAL -->
-<div id="newChatModal" class="modal">
   <div class="modal-box">
-    <div class="modal-top">
-      <h3 id="newChatTitle">Новый чат</h3>
-      <button class="icon-btn" onclick="closeNewChat()" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" class="icon"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-    </div>
+    <h3 id="settingsTitle">Настройки</h3>
 
-    <div class="settings-panel">
-      <div class="hint" id="newChatHint">Введите username пользователя</div>
-      <input id="newChatUserInput" class="settings-input" placeholder="@username" />
-      <button id="createChatBtn" class="primary-btn">Открыть чат</button>
-    </div>
+    <label id="themeLabel" style="display:block;margin-top:10px;">Тема</label>
+    <select id="themeSelect" style="width:100%;padding:10px;margin-top:6px;">
+      <option value="dark">Тёмная</option>
+      <option value="light">Светлая</option>
+    </select>
+
+    <label id="langLabel" style="display:block;margin-top:12px;">Язык</label>
+    <select id="langSelect" style="width:100%;padding:10px;margin-top:6px;">
+      <option value="ru">Русский</option>
+      <option value="en">English</option>
+    </select>
+
+    <label id="usernameLabel" style="display:block;margin-top:12px;">Username</label>
+    <input id="newUsernameInput" placeholder="@username2" style="width:100%;padding:10px;margin-top:6px;" />
+    <button id="changeUsernameBtn" style="width:100%;margin-top:10px;">Сменить username</button>
+
+    <button id="notifBtn" style="width:100%;margin-top:10px;">Включить уведомления</button>
+
+    <button id="settingsCloseBtn" style="width:100%;margin-top:10px;" onclick="closeSettings()">Закрыть</button>
   </div>
 </div>
 
+<!-- Socket.IO MUST be before script.js -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="script.js"></script>
+
 </body>
 </html>
