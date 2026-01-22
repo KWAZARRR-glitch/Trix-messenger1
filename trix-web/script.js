@@ -1,12 +1,27 @@
+/* =========================
+   TRIX Messenger (FULL)
+   - Auth (register/login) via API
+   - Theme (dark/light)
+   - Language (ru/en)
+   - Rename username
+   - Chats + messages
+   - Netlify proxy support (API_BASE = "")
+   - WAU v1: realtime via Socket.IO (online, typing, instant messages)
+   - WAU v2: unread badges + browser notifications + smart scroll
+   ========================= */
+
 let currentUser = null;
 
 let activeChatTarget = "TRIX Bot";
 let activeChatId = null;
-let pollTimer = null;
 
 const chatLastTs = new Map(); // chatId -> last ts
 
-// ---------- DOM ----------
+// unread state (client-side)
+const unread = new Map(); // targetUser -> count
+const UNREAD_KEY = "trix_unread_v1";
+
+// ----- DOM -----
 const authUser = document.getElementById("authUser");
 const authPass = document.getElementById("authPass");
 const authPass2 = document.getElementById("authPass2");
@@ -20,117 +35,74 @@ const app = document.getElementById("app");
 const profileName = document.getElementById("profileName");
 const profileUsername = document.getElementById("profileUsername");
 
-const avatarMini = document.getElementById("avatarMini");
-const avatarBig = document.getElementById("avatarBig");
-const avatarFile = document.getElementById("avatarFile");
-const avatarUploadText = document.getElementById("avatarUploadText");
-
 const menuBtn = document.getElementById("menuBtn");
 const sideMenu = document.getElementById("sideMenu");
+
 const openProfileBtn = document.getElementById("openProfile");
 const openSettingsBtn = document.getElementById("openSettings");
 const logoutBtn = document.getElementById("logoutBtn");
 
 const profileModal = document.getElementById("profileModal");
-const profileInfoName = document.getElementById("profileInfoName");
-const profileInfoUsername = document.getElementById("profileInfoUsername");
+const profileInfo = document.getElementById("profileInfo");
 
 const settingsModal = document.getElementById("settingsModal");
-
-// settings screens
-const settingsScreenMain = document.getElementById("settingsScreenMain");
-const settingsScreenTheme = document.getElementById("settingsScreenTheme");
-const settingsScreenLang = document.getElementById("settingsScreenLang");
-const settingsScreenUsername = document.getElementById("settingsScreenUsername");
-const settingsScreenAbout = document.getElementById("settingsScreenAbout");
-
-// settings nav
-const goTheme = document.getElementById("goTheme");
-const goLang = document.getElementById("goLang");
-const goUsername = document.getElementById("goUsername");
-const goAbout = document.getElementById("goAbout");
-
-const backFromTheme = document.getElementById("backFromTheme");
-const backFromLang = document.getElementById("backFromLang");
-const backFromUsername = document.getElementById("backFromUsername");
-const backFromAbout = document.getElementById("backFromAbout");
-
-// theme radios
-const setThemeDark = document.getElementById("setThemeDark");
-const setThemeLight = document.getElementById("setThemeLight");
-const dotDark = document.getElementById("dotDark");
-const dotLight = document.getElementById("dotLight");
-
-// lang radios
-const setLangRu = document.getElementById("setLangRu");
-const setLangEn = document.getElementById("setLangEn");
-const dotRu = document.getElementById("dotRu");
-const dotEn = document.getElementById("dotEn");
-
-// username change
+const themeSelect = document.getElementById("themeSelect");
+const langSelect = document.getElementById("langSelect");
 const newUsernameInput = document.getElementById("newUsernameInput");
 const changeUsernameBtn = document.getElementById("changeUsernameBtn");
 
-// about
-const appVersion = document.getElementById("appVersion");
-const buildInfo = document.getElementById("buildInfo");
-const cacheInfo = document.getElementById("cacheInfo");
+// optional notify btn
+const notifBtn = document.getElementById("notifBtn");
 
-// list values
-const themeValue = document.getElementById("themeValue");
-const langValue = document.getElementById("langValue");
-const usernameValue = document.getElementById("usernameValue");
+const settingsTitle = document.getElementById("settingsTitle");
+const themeLabel = document.getElementById("themeLabel");
+const langLabel = document.getElementById("langLabel");
+const usernameLabel = document.getElementById("usernameLabel");
+const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 
-// sidebar/chat
+const profileTitle = document.getElementById("profileTitle");
+const profileCloseBtn = document.getElementById("profileCloseBtn");
+
 const chatList = document.getElementById("chatList");
 const chatHeader = document.getElementById("chatHeader");
 const messagesEl = document.getElementById("messages");
 const msgInput = document.getElementById("msgInput");
 const sendBtn = document.getElementById("sendBtn");
 const chatSearch = document.getElementById("chatSearch");
-const newChatBtn = document.getElementById("newChatBtn");
 
-// new chat modal
-const newChatModal = document.getElementById("newChatModal");
-const newChatUserInput = document.getElementById("newChatUserInput");
-const createChatBtn = document.getElementById("createChatBtn");
-
-// i18n texts
-const menuProfileText = document.getElementById("menuProfileText");
-const menuSettingsText = document.getElementById("menuSettingsText");
-const menuLogoutText = document.getElementById("menuLogoutText");
-
-const siThemeText = document.getElementById("siThemeText");
-const siLangText = document.getElementById("siLangText");
-const siUsernameText = document.getElementById("siUsernameText");
-const siAboutText = document.getElementById("siAboutText");
-
-const themeTitle = document.getElementById("themeTitle");
-const themeDarkText = document.getElementById("themeDarkText");
-const themeLightText = document.getElementById("themeLightText");
-
-const langTitle = document.getElementById("langTitle");
-
-const usernameTitle = document.getElementById("usernameTitle");
-const usernameHint = document.getElementById("usernameHint");
-
-const aboutTitle = document.getElementById("aboutTitle");
-
-const newChatTitle = document.getElementById("newChatTitle");
-const newChatHint = document.getElementById("newChatHint");
-
-// ---------- state ----------
 let isRegister = false;
 
-// ---------- API ----------
+// ================== CONFIG ==================
+
+// API:
+// - локально: http://localhost:3000
+// - в проде на Netlify: "" (через /api и netlify.toml proxy)
 const API_BASE = (location.hostname === "localhost")
   ? "http://localhost:3000"
-  : "https://trix-server-ps8d.onrender.com"; // <-- ВСТАВЬ СВОЙ URL
+  : "";
 
+// SOCKET (WAU):
+// - локально: http://localhost:3000
+// - в проде: URL твоего Render сервера
+const PROD_SOCKET_URL = "https://YOUR-RENDER.onrender.com"; // <-- ЗАМЕНИ НА СВОЙ Render URL
+const SOCKET_URL = (location.hostname === "localhost")
+  ? "http://localhost:3000"
+  : PROD_SOCKET_URL;
+
+// polling fallback
+let pollTimer = null;
+
+// Socket.IO runtime
+let socket = null;
+const online = new Set();
+let typingTimer = null;
+
+// ================== TOKEN ==================
 function saveToken(token) { localStorage.setItem("trix_token", token); }
 function getToken() { return localStorage.getItem("trix_token"); }
 function clearToken() { localStorage.removeItem("trix_token"); }
 
+// ================== API ==================
 async function api(path, { method = "GET", body } = {}) {
   const headers = { "Content-Type": "application/json" };
   const token = getToken();
@@ -150,11 +122,13 @@ async function api(path, { method = "GET", body } = {}) {
 async function doRegister(username, password) {
   await api("/api/register", { method: "POST", body: { username, password } });
 }
+
 async function doLogin(username, password) {
   const r = await api("/api/login", { method: "POST", body: { username, password } });
   saveToken(r.token);
   return r.username;
 }
+
 async function tryAutoLogin() {
   const token = getToken();
   if (!token) return null;
@@ -166,245 +140,256 @@ async function tryAutoLogin() {
     return null;
   }
 }
+
 async function userExists(username) {
   const r = await api("/api/users/exists?username=" + encodeURIComponent(username));
   return !!r.exists;
 }
 
-// ---------- helpers ----------
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-function chatIdFromUsers(a, b) {
-  const arr = [a, b].sort();
-  return `${arr[0]}|${arr[1]}`;
-}
-function otherUserFromChatId(chatId, me) {
-  const parts = String(chatId).split("|");
-  if (parts.length !== 2) return null;
-  return parts[0] === me ? parts[1] : parts[1] === me ? parts[0] : null;
-}
-function scrollMessagesToBottom() {
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-function setActiveChat(targetUser) {
-  activeChatTarget = targetUser;
-  activeChatId = chatIdFromUsers(currentUser, targetUser);
-  chatHeader.textContent = targetUser;
-
-  [...chatList.querySelectorAll(".chat")].forEach((el) => {
-    el.classList.toggle("active", el.dataset.chat === targetUser);
-  });
-
-  // for settings list
-  usernameValue.textContent = "@" + currentUser;
-}
-
-// ---------- avatar (local only) ----------
-function avatarKey() {
-  return currentUser ? `trix_avatar_${currentUser}` : null;
-}
-
-function setAvatarFromDataUrl(dataUrl) {
-  // mini
-  avatarMini.textContent = "";
-  avatarMini.innerHTML = `<img alt="avatar" src="${dataUrl}">`;
-  // big
-  avatarBig.textContent = "";
-  avatarBig.innerHTML = `<img alt="avatar" src="${dataUrl}">`;
-}
-
-function setAvatarFallback() {
-  const letter = (currentUser || "T").slice(0, 1).toUpperCase();
-  avatarMini.innerHTML = "";
-  avatarBig.innerHTML = "";
-  avatarMini.textContent = letter;
-  avatarBig.textContent = letter;
-}
-
-function loadAvatar() {
-  if (!currentUser) return;
-  const k = avatarKey();
-  const dataUrl = localStorage.getItem(k);
-  if (dataUrl) setAvatarFromDataUrl(dataUrl);
-  else setAvatarFallback();
-}
-
-function saveAvatarDataUrl(dataUrl) {
-  const k = avatarKey();
-  if (!k) return;
-  localStorage.setItem(k, dataUrl);
-  setAvatarFromDataUrl(dataUrl);
-}
-
-// ---------- theme ----------
-function getTheme() {
-  return localStorage.getItem("trix_theme") || "dark";
-}
-function applyTheme(theme) {
-  document.body.classList.toggle("light", theme === "light");
-
-  // dots
-  dotDark.classList.toggle("on", theme === "dark");
-  dotLight.classList.toggle("on", theme === "light");
-
-  localStorage.setItem("trix_theme", theme);
-  themeValue.textContent = theme === "light" ? t("light") : t("dark");
-}
-
-// ---------- i18n ----------
+// ================== i18n ==================
 const I18N = {
   ru: {
-    login: "Вход",
-    register: "Регистрация",
+    loginTitleLogin: "Вход",
+    loginTitleReg: "Регистрация",
     btnLogin: "Войти",
-    btnRegister: "Зарегистрироваться",
+    btnReg: "Зарегистрироваться",
     switchToLogin: "Уже есть аккаунт? Войти",
-    switchToRegister: "Нет аккаунта? Зарегистрироваться",
-    userPlaceholder: "Имя пользователя",
-    passPlaceholder: "Пароль",
-    pass2Placeholder: "Повторите пароль",
+    switchToReg: "Нет аккаунта? Зарегистрироваться",
+    placeholderUser: "Имя пользователя",
+    placeholderPass: "Пароль",
+    placeholderPass2: "Повторите пароль",
     search: "Поиск",
     message: "Сообщение",
     profile: "Профиль",
     settings: "Настройки",
     logout: "Выйти",
+    close: "Закрыть",
     theme: "Тема",
-    language: "Язык",
-    username: "Username",
-    about: "О приложении",
     dark: "Тёмная",
     light: "Светлая",
-    usernameHint: "Можно сменить @username на новый",
+    language: "Язык",
     changeUsername: "Сменить username",
-    uploadAvatar: "Загрузить аватар",
-    newChat: "Новый чат",
-    newChatHint: "Введите username пользователя",
-    openChat: "Открыть чат",
-    fillFields: "Заполните поля",
-    passMismatch: "Пароли не совпадают",
-    badCreds: "Неверные данные",
-    userExists: "Пользователь уже существует",
-    userNotFound: "Пользователь не найден: ",
-    selfChat: "Нельзя написать самому себе 🙂",
-    invalidUsername: "Неверный username (мин. 3 символа, без |)",
-    usernameTaken: "Этот username уже занят",
+    usernameLabel: "Username",
+    promptNewChat: "Введите username (например: alex)",
+    errFill: "Заполните поля",
+    errPassMismatch: "Пароли не совпадают",
+    errBadCreds: "Неверные данные",
+    errExists: "Пользователь уже существует",
+    errUserNotFound: "Пользователь не найден: ",
+    errSelf: "Нельзя написать самому себе 🙂",
     renamedOk: "Username изменён на @",
+    errUsernameTaken: "Этот username уже занят",
+    errBadUsername: "Неверный username (мин. 3 символа, без |)",
+    typing: "печатает…",
+    online: "online",
+    notifAsk: "Включить уведомления",
+    notifOn: "Уведомления включены",
+    notifDenied: "Браузер запретил уведомления",
   },
   en: {
-    login: "Login",
-    register: "Sign up",
+    loginTitleLogin: "Login",
+    loginTitleReg: "Sign up",
     btnLogin: "Login",
-    btnRegister: "Create account",
+    btnReg: "Create account",
     switchToLogin: "Already have an account? Login",
-    switchToRegister: "No account? Sign up",
-    userPlaceholder: "Username",
-    passPlaceholder: "Password",
-    pass2Placeholder: "Repeat password",
+    switchToReg: "No account? Sign up",
+    placeholderUser: "Username",
+    placeholderPass: "Password",
+    placeholderPass2: "Repeat password",
     search: "Search",
     message: "Message",
     profile: "Profile",
     settings: "Settings",
     logout: "Logout",
+    close: "Close",
     theme: "Theme",
-    language: "Language",
-    username: "Username",
-    about: "About",
     dark: "Dark",
     light: "Light",
-    usernameHint: "You can change @username",
+    language: "Language",
     changeUsername: "Change username",
-    uploadAvatar: "Upload avatar",
-    newChat: "New chat",
-    newChatHint: "Enter user's username",
-    openChat: "Open chat",
-    fillFields: "Fill in the fields",
-    passMismatch: "Passwords do not match",
-    badCreds: "Wrong credentials",
-    userExists: "User already exists",
-    userNotFound: "User not found: ",
-    selfChat: "You can't message yourself 🙂",
-    invalidUsername: "Invalid username (min 3 chars, no |)",
-    usernameTaken: "This username is already taken",
+    usernameLabel: "Username",
+    promptNewChat: "Enter username (e.g. alex)",
+    errFill: "Fill in the fields",
+    errPassMismatch: "Passwords do not match",
+    errBadCreds: "Wrong credentials",
+    errExists: "User already exists",
+    errUserNotFound: "User not found: ",
+    errSelf: "You can't message yourself 🙂",
     renamedOk: "Username changed to @",
+    errUsernameTaken: "This username is already taken",
+    errBadUsername: "Invalid username (min 3 chars, no |)",
+    typing: "typing…",
+    online: "online",
+    notifAsk: "Enable notifications",
+    notifOn: "Notifications enabled",
+    notifDenied: "Browser denied notifications",
   }
 };
 
 function getLang() {
   return localStorage.getItem("trix_lang") || "ru";
 }
+
 function t(key) {
   const lang = getLang();
   return (I18N[lang] && I18N[lang][key]) || I18N.ru[key] || key;
 }
+
 function applyLang(lang) {
   localStorage.setItem("trix_lang", lang);
 
-  // login UI
-  loginTitle.textContent = isRegister ? t("register") : t("login");
-  authBtn.textContent = isRegister ? t("btnRegister") : t("btnLogin");
-  switchAuth.textContent = isRegister ? t("switchToLogin") : t("switchToRegister");
-  authUser.placeholder = t("userPlaceholder");
-  authPass.placeholder = t("passPlaceholder");
-  authPass2.placeholder = t("pass2Placeholder");
+  authUser.placeholder = t("placeholderUser");
+  authPass.placeholder = t("placeholderPass");
+  authPass2.placeholder = t("placeholderPass2");
 
-  // app UI
+  loginTitle.textContent = isRegister ? t("loginTitleReg") : t("loginTitleLogin");
+  authBtn.textContent = isRegister ? t("btnReg") : t("btnLogin");
+  switchAuth.textContent = isRegister ? t("switchToLogin") : t("switchToReg");
+
   chatSearch.placeholder = t("search");
   msgInput.placeholder = t("message");
 
-  // menu
-  menuProfileText.textContent = t("profile");
-  menuSettingsText.textContent = t("settings");
-  menuLogoutText.textContent = t("logout");
+  openProfileBtn.textContent = t("profile");
+  openSettingsBtn.textContent = t("settings");
+  logoutBtn.textContent = t("logout");
 
-  // settings list
-  siThemeText.textContent = t("theme");
-  siLangText.textContent = t("language");
-  siUsernameText.textContent = t("username");
-  siAboutText.textContent = t("about");
+  profileTitle.textContent = t("profile");
+  profileCloseBtn.textContent = t("close");
 
-  themeTitle.textContent = t("theme");
-  themeDarkText.textContent = t("dark");
-  themeLightText.textContent = t("light");
-
-  langTitle.textContent = t("language");
-  usernameTitle.textContent = t("username");
-  usernameHint.textContent = t("usernameHint");
+  settingsTitle.textContent = t("settings");
+  themeLabel.textContent = t("theme");
+  langLabel.textContent = t("language");
+  usernameLabel.textContent = t("usernameLabel");
   changeUsernameBtn.textContent = t("changeUsername");
+  settingsCloseBtn.textContent = t("close");
 
-  aboutTitle.textContent = t("about");
+  themeSelect.options[0].textContent = t("dark");
+  themeSelect.options[1].textContent = t("light");
 
-  newChatTitle.textContent = t("newChat");
-  newChatHint.textContent = t("newChatHint");
-  createChatBtn.textContent = t("openChat");
-
-  avatarUploadText.textContent = t("uploadAvatar");
-
-  // values
-  themeValue.textContent = getTheme() === "light" ? t("light") : t("dark");
-  langValue.textContent = getLang() === "en" ? "English" : "Русский";
-  usernameValue.textContent = "@" + (currentUser || "username");
+  if (notifBtn) notifBtn.textContent = t("notifAsk");
 }
 
-// ---------- UI show/hide ----------
+function loadLang() {
+  const lang = getLang();
+  langSelect.value = lang;
+  applyLang(lang);
+}
+
+// ================== THEME ==================
+function applyTheme(theme) {
+  document.body.classList.toggle("light", theme === "light");
+  localStorage.setItem("trix_theme", theme);
+  themeSelect.value = theme;
+}
+
+function loadTheme() {
+  const theme = localStorage.getItem("trix_theme") || "dark";
+  applyTheme(theme);
+}
+
+// ================== UNREAD STORAGE ==================
+function unreadStorageKey() {
+  return `${UNREAD_KEY}:${currentUser || "guest"}`;
+}
+
+function loadUnread() {
+  unread.clear();
+  try {
+    const raw = localStorage.getItem(unreadStorageKey());
+    const obj = raw ? JSON.parse(raw) : {};
+    for (const [k, v] of Object.entries(obj)) {
+      unread.set(k, Number(v) || 0);
+    }
+  } catch {}
+}
+
+function saveUnread() {
+  const obj = {};
+  for (const [k, v] of unread.entries()) obj[k] = v;
+  localStorage.setItem(unreadStorageKey(), JSON.stringify(obj));
+}
+
+function incUnread(user) {
+  if (!user) return;
+  const n = (unread.get(user) || 0) + 1;
+  unread.set(user, n);
+  saveUnread();
+  updateUnreadBadge(user);
+  updateTitleBadge();
+}
+
+function clearUnread(user) {
+  if (!user) return;
+  unread.set(user, 0);
+  saveUnread();
+  updateUnreadBadge(user);
+  updateTitleBadge();
+}
+
+function totalUnread() {
+  let sum = 0;
+  for (const v of unread.values()) sum += (Number(v) || 0);
+  return sum;
+}
+
+function updateTitleBadge() {
+  const n = totalUnread();
+  document.title = n > 0 ? `(${n}) TRIX Messenger` : "TRIX Messenger";
+}
+
+function updateUnreadBadge(user) {
+  const chatEl = [...chatList.querySelectorAll(".chat")].find((el) => el.dataset.chat === user);
+  if (!chatEl) return;
+  const badge = chatEl.querySelector(".unread-badge");
+  const n = unread.get(user) || 0;
+
+  if (badge) {
+    badge.textContent = n > 99 ? "99+" : String(n);
+  }
+  chatEl.classList.toggle("has-unread", n > 0);
+}
+
+// ================== NOTIFICATIONS ==================
+async function ensureNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const p = await Notification.requestPermission();
+  return p === "granted";
+}
+
+function notifyNewMessage(from, text) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+  // не спамим, если вкладка активна и чат открыт
+  if (document.visibilityState === "visible" && from === activeChatTarget) return;
+
+  try {
+    new Notification(`TRIX: ${from}`, {
+      body: String(text || "").slice(0, 140),
+    });
+  } catch {}
+}
+
+if (notifBtn) {
+  notifBtn.onclick = async () => {
+    const ok = await ensureNotificationPermission();
+    if (ok) alert(t("notifOn"));
+    else alert(t("notifDenied"));
+  };
+}
+
+// ================== HELPERS ==================
 function showApp(username) {
   currentUser = username;
   loginScreen.style.display = "none";
   app.style.display = "flex";
   profileName.textContent = username;
   profileUsername.textContent = "@" + username;
-  usernameValue.textContent = "@" + username;
 
-  profileInfoName.textContent = username;
-  profileInfoUsername.textContent = "@" + username;
-
-  loadAvatar();
-  applyLang(getLang());
+  loadUnread();
+  updateTitleBadge();
 }
 
 function showLogin() {
@@ -413,22 +398,67 @@ function showLogin() {
   app.style.display = "none";
 }
 
-// ---------- Messages rendering ----------
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function chatIdFromUsers(a, b) {
+  const arr = [a, b].sort();
+  return `${arr[0]}|${arr[1]}`;
+}
+
+function otherUserFromChatId(chatId, me) {
+  const parts = String(chatId).split("|");
+  if (parts.length !== 2) return null;
+  return parts[0] === me ? parts[1] : parts[1] === me ? parts[0] : null;
+}
+
+function scrollMessagesToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function isAtBottom() {
+  return messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 40;
+}
+
+function setActiveChat(targetUser) {
+  activeChatTarget = targetUser;
+  activeChatId = chatIdFromUsers(currentUser, targetUser);
+  setHeaderBase();
+
+  [...chatList.querySelectorAll(".chat")].forEach((el) => {
+    el.classList.toggle("active", el.dataset.chat === targetUser);
+  });
+
+  // прочитали чат
+  clearUnread(targetUser);
+
+  refreshHeaderStatus();
+}
+
 function renderMessage(msg) {
   const mine = msg.sender === currentUser;
   const wrap = document.createElement("div");
   wrap.className = "msg " + (mine ? "me" : "them");
 
+  const locale = getLang() === "ru" ? "ru-RU" : "en-US";
+  const timeStr = new Date(msg.ts).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+
   wrap.innerHTML = `
     <div class="msg-bubble">
       <div class="msg-text">${escapeHtml(msg.text)}</div>
-      <div class="msg-time">${new Date(msg.ts).toLocaleTimeString(getLang()==="ru" ? "ru-RU" : "en-US", { hour:"2-digit", minute:"2-digit" })}</div>
+      <div class="msg-time">${timeStr}</div>
     </div>
   `;
   return wrap;
 }
 
-// ---------- chats/messages ----------
+// ================== CHATS/MESSAGES ==================
 async function loadChatsAndRender() {
   let chats = [];
   try {
@@ -443,21 +473,30 @@ async function loadChatsAndRender() {
     const other = otherUserFromChatId(chatId, currentUser);
     if (other) targets.push(other);
   }
+
   if (!targets.includes("TRIX Bot")) targets.unshift("TRIX Bot");
 
   chatList.innerHTML = "";
-  for (const u of targets) {
+  for (const tUser of targets) {
     const div = document.createElement("div");
     div.className = "chat";
-    div.dataset.chat = u;
+    div.dataset.chat = tUser;
+
+    const badgeVal = unread.get(tUser) || 0;
+
     div.innerHTML = `
-      <div class="chat-title">${escapeHtml(u)}</div>
-      <div class="chat-last" id="last-${escapeHtml(u)}">—</div>
+      <div class="chat-title">${escapeHtml(tUser)}</div>
+      <div class="chat-last" id="last-${escapeHtml(tUser)}">—</div>
+      <span class="unread-badge">${badgeVal > 99 ? "99+" : badgeVal}</span>
     `;
+
+    div.classList.toggle("has-unread", (unread.get(tUser) || 0) > 0);
+
     div.onclick = async () => {
-      setActiveChat(u);
+      setActiveChat(tUser);
       await loadFullActiveChatHistory();
     };
+
     chatList.appendChild(div);
   }
 
@@ -486,24 +525,27 @@ async function loadFullActiveChatHistory() {
   if (lastEl) lastEl.textContent = String(lastText).slice(0, 40);
 
   scrollMessagesToBottom();
+
+  // чат прочитан
+  clearUnread(activeChatTarget);
 }
 
-async function loadNewMessagesForActiveChat(scrollIfBottom = false) {
+async function loadNewMessagesForActiveChat() {
   if (!activeChatId) return;
 
   const lastTs = chatLastTs.get(activeChatId) || 0;
+
   const r = await api(
     "/api/messages?chat=" +
-      encodeURIComponent(activeChatId) +
-      "&since=" +
-      encodeURIComponent(String(lastTs))
+    encodeURIComponent(activeChatId) +
+    "&since=" +
+    encodeURIComponent(String(lastTs))
   );
 
   const list = r.messages || [];
   if (!list.length) return;
 
-  const atBottom =
-    messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 40;
+  const atBottom = isAtBottom();
 
   let newLastTs = lastTs;
   for (const m of list) {
@@ -516,10 +558,11 @@ async function loadNewMessagesForActiveChat(scrollIfBottom = false) {
   const lastEl = document.getElementById("last-" + activeChatTarget);
   if (lastEl) lastEl.textContent = String(lastMsg.text || "—").slice(0, 40);
 
-  if (scrollIfBottom || atBottom) scrollMessagesToBottom();
+  // WAU: если человек читает вверх — не срываем вниз
+  if (atBottom) scrollMessagesToBottom();
 }
 
-// ---------- sending ----------
+// ================== SEND ==================
 async function sendCurrentMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
@@ -529,15 +572,18 @@ async function sendCurrentMessage() {
 
   try {
     await api("/api/messages", { method: "POST", body: { to: activeChatTarget, text } });
-    await loadNewMessagesForActiveChat(true);
+    // если сокеты работают — сообщение придёт событием,
+    // но как fallback подтянем новые
+    await loadNewMessagesForActiveChat();
   } catch (e) {
     const msg = String(e?.message || "");
-    if (msg.includes("user_not_found")) return alert(t("userNotFound") + activeChatTarget);
+    if (msg.includes("user_not_found")) return alert(t("errUserNotFound") + activeChatTarget);
     return alert("Error: " + msg);
   }
 }
 
 sendBtn.onclick = sendCurrentMessage;
+
 msgInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -545,28 +591,21 @@ msgInput.addEventListener("keydown", (e) => {
   }
 });
 
-// ---------- New chat (modal) ----------
-newChatBtn.onclick = () => openNewChat();
+// ================== NEW CHAT ==================
+chatSearch.addEventListener("dblclick", () => {
+  startNewChat().catch((err) => alert("Error: " + err.message));
+});
 
-function openNewChat() {
-  newChatModal.style.display = "flex";
-  newChatUserInput.value = "";
-  newChatUserInput.focus();
-}
-function closeNewChat() {
-  newChatModal.style.display = "none";
-}
-window.closeNewChat = closeNewChat;
-
-async function startNewChat(usernameRaw) {
-  let to = String(usernameRaw || "").trim();
-  if (to.startsWith("@")) to = to.slice(1).trim();
+async function startNewChat() {
+  let to = prompt(t("promptNewChat"));
+  if (to == null) return;
+  to = to.trim();
   if (!to) return;
 
-  if (to === currentUser) return alert(t("selfChat"));
+  if (to === currentUser) return alert(t("errSelf"));
 
   const exists = await userExists(to);
-  if (!exists) return alert(t("userNotFound") + to);
+  if (!exists) return alert(t("errUserNotFound") + to);
 
   const existing = [...chatList.querySelectorAll(".chat")].find((el) => el.dataset.chat === to);
   if (existing) {
@@ -575,12 +614,14 @@ async function startNewChat(usernameRaw) {
     return;
   }
 
+  // создать чат блок
   const div = document.createElement("div");
   div.className = "chat";
   div.dataset.chat = to;
   div.innerHTML = `
     <div class="chat-title">${escapeHtml(to)}</div>
     <div class="chat-last" id="last-${escapeHtml(to)}">—</div>
+    <span class="unread-badge">0</span>
   `;
   div.onclick = async () => {
     setActiveChat(to);
@@ -591,21 +632,8 @@ async function startNewChat(usernameRaw) {
   setActiveChat(to);
   messagesEl.innerHTML = "";
   chatLastTs.set(activeChatId, 0);
-  chatHeader.textContent = to;
   scrollMessagesToBottom();
 }
-
-createChatBtn.onclick = async () => {
-  try {
-    await startNewChat(newChatUserInput.value);
-    closeNewChat();
-  } catch (e) {
-    alert("Error: " + (e?.message || e));
-  }
-};
-newChatUserInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") createChatBtn.click();
-});
 
 // search filter
 chatSearch.addEventListener("input", () => {
@@ -616,143 +644,55 @@ chatSearch.addEventListener("input", () => {
   });
 });
 
-// ---------- polling ----------
+// ================== POLLING FALLBACK ==================
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(async () => {
     if (!currentUser || !activeChatId) return;
-    try { await loadNewMessagesForActiveChat(false); } catch {}
-  }, 1000);
+    try { await loadNewMessagesForActiveChat(); } catch {}
+  }, 1500);
 }
+
 function stopPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
 }
 
-// ---------- auth UI ----------
-switchAuth.onclick = () => {
-  isRegister = !isRegister;
-  authPass2.style.display = isRegister ? "block" : "none";
-  applyLang(getLang());
-};
-
-authBtn.onclick = async () => {
-  const u = authUser.value.trim();
-  const p = authPass.value;
-
-  if (!u || !p) return alert(t("fillFields"));
-
-  authBtn.disabled = true;
-  try {
-    if (isRegister) {
-      if (p !== authPass2.value) return alert(t("passMismatch"));
-      await doRegister(u, p);
-      const username = await doLogin(u, p);
-      showApp(username);
-    } else {
-      const username = await doLogin(u, p);
-      showApp(username);
-    }
-
-    await loadChatsAndRender();
-    await loadFullActiveChatHistory();
-    startPolling();
-  } catch (e) {
-    const msg = String(e?.message || "");
-    if (msg.includes("user_exists")) return alert(t("userExists"));
-    if (msg.includes("bad_credentials")) return alert(t("badCreds"));
-    if (msg.includes("bad_username")) return alert(t("invalidUsername"));
-    if (msg.includes("password_too_short")) return alert("Password too short (min 4)");
-    return alert("Error: " + msg);
-  } finally {
-    authBtn.disabled = false;
-  }
-};
-
-// ---------- menu/profile/settings ----------
+// ================== MENU/PROFILE/SETTINGS ==================
 menuBtn.onclick = () => sideMenu.classList.toggle("open");
 
 openProfileBtn.onclick = () => {
   profileModal.style.display = "flex";
-  profileInfoName.textContent = currentUser;
-  profileInfoUsername.textContent = "@" + currentUser;
+  profileInfo.textContent = `Имя: ${currentUser}\nUsername: @${currentUser}`;
   sideMenu.classList.remove("open");
 };
 
 openSettingsBtn.onclick = () => {
-  openSettingsMain();
   settingsModal.style.display = "flex";
   sideMenu.classList.remove("open");
 };
 
 logoutBtn.onclick = () => {
   stopPolling();
+  stopRealtime();
   clearToken();
   location.reload();
 };
 
-function closeProfile() { profileModal.style.display = "none"; }
-function closeSettings() { settingsModal.style.display = "none"; openSettingsMain(); }
+function closeProfile() {
+  profileModal.style.display = "none";
+}
+function closeSettings() {
+  settingsModal.style.display = "none";
+}
 window.closeProfile = closeProfile;
 window.closeSettings = closeSettings;
 
-// ---------- settings navigation (telegram-like) ----------
-function hideAllSettingsScreens() {
-  settingsScreenMain.classList.add("hidden");
-  settingsScreenTheme.classList.add("hidden");
-  settingsScreenLang.classList.add("hidden");
-  settingsScreenUsername.classList.add("hidden");
-  settingsScreenAbout.classList.add("hidden");
-}
-function openSettingsMain() {
-  hideAllSettingsScreens();
-  settingsScreenMain.classList.remove("hidden");
-}
-function openSettingsTheme() {
-  hideAllSettingsScreens();
-  settingsScreenTheme.classList.remove("hidden");
-}
-function openSettingsLang() {
-  hideAllSettingsScreens();
-  settingsScreenLang.classList.remove("hidden");
-}
-function openSettingsUsername() {
-  hideAllSettingsScreens();
-  settingsScreenUsername.classList.remove("hidden");
-  newUsernameInput.value = "@" + currentUser;
-  newUsernameInput.focus();
-}
-function openSettingsAbout() {
-  hideAllSettingsScreens();
-  settingsScreenAbout.classList.remove("hidden");
-}
+// theme/lang handlers
+themeSelect.onchange = () => applyTheme(themeSelect.value);
+langSelect.onchange = () => applyLang(langSelect.value);
 
-goTheme.onclick = openSettingsTheme;
-goLang.onclick = openSettingsLang;
-goUsername.onclick = openSettingsUsername;
-goAbout.onclick = openSettingsAbout;
-
-backFromTheme.onclick = openSettingsMain;
-backFromLang.onclick = openSettingsMain;
-backFromUsername.onclick = openSettingsMain;
-backFromAbout.onclick = openSettingsMain;
-
-// ---------- theme actions ----------
-setThemeDark.onclick = () => applyTheme("dark");
-setThemeLight.onclick = () => applyTheme("light");
-
-// ---------- language actions ----------
-function setLang(lang) {
-  localStorage.setItem("trix_lang", lang);
-  dotRu.classList.toggle("on", lang === "ru");
-  dotEn.classList.toggle("on", lang === "en");
-  langValue.textContent = lang === "en" ? "English" : "Русский";
-  applyLang(lang);
-}
-setLangRu.onclick = () => setLang("ru");
-setLangEn.onclick = () => setLang("en");
-
-// ---------- username change (server) ----------
+// rename username
 async function changeUsername(newNameRaw) {
   let newName = String(newNameRaw || "").trim();
   if (newName.startsWith("@")) newName = newName.slice(1).trim();
@@ -764,28 +704,20 @@ async function changeUsername(newNameRaw) {
   });
 
   saveToken(r.token);
-
-  // avatar migration (localStorage key changes!)
-  const oldAvatarKey = `trix_avatar_${currentUser}`;
-  const oldAvatar = localStorage.getItem(oldAvatarKey);
-
   currentUser = r.username;
 
-  // move avatar if existed
-  if (oldAvatar) {
-    localStorage.removeItem(oldAvatarKey);
-    localStorage.setItem(`trix_avatar_${currentUser}`, oldAvatar);
-  }
+  profileName.textContent = r.username;
+  profileUsername.textContent = "@" + r.username;
 
-  profileName.textContent = currentUser;
-  profileUsername.textContent = "@" + currentUser;
-  profileInfoName.textContent = currentUser;
-  profileInfoUsername.textContent = "@" + currentUser;
+  // unread state must be re-keyed
+  loadUnread();
+  updateTitleBadge();
 
-  usernameValue.textContent = "@" + currentUser;
-  loadAvatar();
+  // realtime re-auth
+  stopRealtime();
+  startRealtime();
 
-  // chats need refresh because chatId changes include username
+  // обновим активный чат/id и перезагрузим список/историю
   activeChatId = chatIdFromUsers(currentUser, activeChatTarget);
   chatLastTs.clear();
   await loadChatsAndRender();
@@ -793,86 +725,189 @@ async function changeUsername(newNameRaw) {
 }
 
 changeUsernameBtn.onclick = async () => {
+  const val = newUsernameInput.value.trim();
+  if (!val) return alert(t("errBadUsername"));
+
   try {
-    await changeUsername(newUsernameInput.value);
+    await changeUsername(val);
+    newUsernameInput.value = "";
+    closeSettings();
     alert(t("renamedOk") + currentUser);
-    openSettingsMain();
   } catch (e) {
     const msg = String(e?.message || "");
-    if (msg.includes("username_taken")) return alert(t("usernameTaken"));
-    if (msg.includes("bad_username")) return alert(t("invalidUsername"));
+    if (msg.includes("username_taken")) return alert(t("errUsernameTaken"));
+    if (msg.includes("bad_username")) return alert(t("errBadUsername"));
     if (msg.includes("same_username")) return alert("Это уже ваш username");
     return alert("Error: " + msg);
   }
 };
 
-// ---------- avatar upload ----------
-avatarFile.addEventListener("change", async () => {
-  const file = avatarFile.files && avatarFile.files[0];
-  if (!file) return;
+// ================== AUTH UI ==================
+switchAuth.onclick = () => {
+  isRegister = !isRegister;
+  authPass2.style.display = isRegister ? "block" : "none";
 
-  // ограничим размер (чтобы localStorage не распух)
-  if (file.size > 1024 * 1024 * 1.2) {
-    alert("Файл слишком большой (макс ~1.2MB)");
-    avatarFile.value = "";
-    return;
-  }
+  loginTitle.textContent = isRegister ? t("loginTitleReg") : t("loginTitleLogin");
+  authBtn.textContent = isRegister ? t("btnReg") : t("btnLogin");
+  switchAuth.textContent = isRegister ? t("switchToLogin") : t("switchToReg");
+};
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = String(reader.result || "");
-    if (!dataUrl.startsWith("data:image/")) {
-      alert("Нужно изображение");
-      return;
-    }
-    saveAvatarDataUrl(dataUrl);
-  };
-  reader.readAsDataURL(file);
-});
+authBtn.onclick = async () => {
+  const u = authUser.value.trim();
+  const p = authPass.value;
 
-// ---------- service worker register (cache/offline) ----------
-async function registerSW() {
+  if (!u || !p) return alert(t("errFill"));
+
+  authBtn.disabled = true;
+
   try {
-    if (!("serviceWorker" in navigator)) return;
-    await navigator.serviceWorker.register("./sw.js");
-    if (cacheInfo) cacheInfo.textContent = "включён";
-  } catch {
-    if (cacheInfo) cacheInfo.textContent = "выключен";
+    if (isRegister) {
+      if (p !== authPass2.value) return alert(t("errPassMismatch"));
+      await doRegister(u, p);
+      const username = await doLogin(u, p);
+      showApp(username);
+    } else {
+      const username = await doLogin(u, p);
+      showApp(username);
+    }
+
+    await loadChatsAndRender();
+    await loadFullActiveChatHistory();
+
+    startRealtime();
+    startPolling();
+
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (msg.includes("user_exists")) return alert(t("errExists"));
+    if (msg.includes("bad_credentials")) return alert(t("errBadCreds"));
+    if (msg.includes("password_too_short")) return alert("Password too short (min 4)");
+    if (msg.includes("bad_username")) return alert(t("errBadUsername"));
+    return alert("Error: " + msg);
+  } finally {
+    authBtn.disabled = false;
   }
+};
+
+// ================== HEADER STATUS (WAU) ==================
+function setHeaderBase() {
+  chatHeader.textContent = activeChatTarget || "";
 }
 
-// ---------- init ----------
-(function initAbout() {
-  if (appVersion) appVersion.textContent = "0.1";
-  if (buildInfo) buildInfo.textContent = "local";
-})();
+function setHeaderStatus(statusText) {
+  const base = activeChatTarget || "";
+  chatHeader.textContent = statusText ? `${base} · ${statusText}` : base;
+}
 
-(function initDots() {
-  applyTheme(getTheme());
-  setLang(getLang()); // also applies lang
-})();
+function refreshHeaderStatus() {
+  if (!activeChatTarget) return;
+  if (online.has(activeChatTarget)) setHeaderStatus(t("online"));
+  else setHeaderStatus("");
+}
 
-// ---------- profile modal close on esc ----------
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    profileModal.style.display = "none";
-    settingsModal.style.display = "none";
-    newChatModal.style.display = "none";
+// ================== SOCKET.IO REALTIME (WAU) ==================
+function startRealtime() {
+  if (!window.io) {
+    console.warn("socket.io client not loaded. Realtime disabled.");
+    return;
   }
+  if (socket) return;
+
+  if (location.hostname !== "localhost" && PROD_SOCKET_URL.includes("YOUR-RENDER")) {
+    console.warn("Set PROD_SOCKET_URL in script.js to your Render URL for realtime.");
+  }
+
+  socket = window.io(SOCKET_URL, {
+    transports: ["websocket"],
+    auth: { token: getToken() },
+  });
+
+  socket.on("connect", () => {
+    refreshHeaderStatus();
+  });
+
+  socket.on("disconnect", () => {
+    setHeaderStatus("");
+  });
+
+  socket.on("message:new", async (msg) => {
+    try {
+      const other = otherUserFromChatId(msg.chat, currentUser);
+
+      // last preview
+      if (other) {
+        const lastEl = document.getElementById("last-" + other);
+        if (lastEl) lastEl.textContent = String(msg.text || "—").slice(0, 40);
+      }
+
+      // active chat -> render
+      if (msg.chat === activeChatId) {
+        messagesEl.appendChild(renderMessage(msg));
+        chatLastTs.set(activeChatId, Math.max(chatLastTs.get(activeChatId) || 0, msg.ts || 0));
+
+        // умный скролл: только если мы у низа
+        if (isAtBottom()) scrollMessagesToBottom();
+      } else {
+        // если сообщение не в открытом чате — считаем непрочитанным
+        if (other) {
+          incUnread(other);
+          notifyNewMessage(other, msg.text);
+        }
+
+        // если чата нет в списке — перезагрузим
+        await loadChatsAndRender();
+      }
+    } catch {}
+  });
+
+  socket.on("presence", ({ username, online: isOnline }) => {
+    if (!username) return;
+    if (isOnline) online.add(username);
+    else online.delete(username);
+
+    if (username === activeChatTarget) {
+      refreshHeaderStatus();
+    }
+  });
+
+  socket.on("typing", ({ from, isTyping }) => {
+    if (from !== activeChatTarget) return;
+    if (isTyping) setHeaderStatus(t("typing"));
+    else refreshHeaderStatus();
+  });
+}
+
+function stopRealtime() {
+  if (!socket) return;
+  try { socket.disconnect(); } catch {}
+  socket = null;
+}
+
+// typing emit
+msgInput.addEventListener("input", () => {
+  if (!socket || !activeChatTarget) return;
+
+  socket.emit("typing", { to: activeChatTarget, isTyping: true });
+
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    if (socket) socket.emit("typing", { to: activeChatTarget, isTyping: false });
+  }, 900);
 });
 
-// ---------- startup ----------
+// ================== INIT ==================
 (async () => {
   showLogin();
-  applyLang(getLang());
-  applyTheme(getTheme());
-  await registerSW();
+  loadTheme();
+  loadLang();
 
   const username = await tryAutoLogin();
   if (username) {
     showApp(username);
     await loadChatsAndRender();
     await loadFullActiveChatHistory();
+
+    startRealtime();
     startPolling();
   }
 })();

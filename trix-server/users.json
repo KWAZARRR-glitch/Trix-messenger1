@@ -10,5 +10,11 @@
     "salt": "a72cf5a4f12843517a1b27b676230477",
     "password_hash": "a347c34733d91f289323b33d91a0a58865316e2a0d8433b601f2111765820928",
     "created_at": 1768993977080
+  },
+  "чикатило": {
+    "username": "чикатило",
+    "salt": "54cdd0ef82c34270bd650ef1010029d9",
+    "password_hash": "628f1cf768df8a3708fa84bee6be4205a64e037a8d53fb9b78ae2664d31ae787",
+    "created_at": 1769044346685
   }
 }

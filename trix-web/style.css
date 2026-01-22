@@ -469,3 +469,26 @@ body{ margin:0; font-family:Arial; background:var(--bg); color:var(--text); }
   .modal-box{ width:92vw; }
   .msg-bubble{ max-width:86%; }
 }
+.chat {
+  position: relative;
+}
+
+.unread-badge {
+  position: absolute;
+  right: 12px;
+  top: 14px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ff2d2d;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  display: none;
+}
+
+.chat.has-unread .unread-badge {
+  display: inline-block;
+}

@@ -3,9 +3,13 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
-app.use(cors());
+
+// Разрешаем CORS (для API и сокетов)
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 const USERS_PATH = path.join(__dirname, "users.json");
@@ -122,12 +126,21 @@ function auth(req, res, next) {
 
 // ---------- validations ----------
 function isUsernameValid(u) {
-  // Разрешаем почти любые символы, кроме разделителя чата '|'
-  // и слишком длинных
   if (!u) return false;
   if (u.includes("|")) return false;
   if (u.length < 3 || u.length > 24) return false;
   return true;
+}
+
+function chatIdFromUsers(a, b) {
+  const arr = [a, b].sort();
+  return `${arr[0]}|${arr[1]}`;
+}
+
+function otherUserFromChatId(chatId, me) {
+  const parts = String(chatId).split("|");
+  if (parts.length !== 2) return null;
+  return parts[0] === me ? parts[1] : parts[1] === me ? parts[0] : null;
 }
 
 // ---------- ensure bot ----------
@@ -146,7 +159,7 @@ function isUsernameValid(u) {
   }
 })();
 
-// ---------- routes ----------
+// ---------- API routes ----------
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, name: "trix-server", time: Date.now() });
 });
@@ -241,8 +254,7 @@ app.post("/api/messages", auth, (req, res) => {
   const users = readJson(USERS_PATH, {});
   if (!users[to]) return res.status(404).json({ error: "user_not_found" });
 
-  const arr = [from, to].sort();
-  const chat = `${arr[0]}|${arr[1]}`;
+  const chat = chatIdFromUsers(from, to);
 
   const messages = readJson(MSG_PATH, []);
   const msg = {
@@ -251,16 +263,20 @@ app.post("/api/messages", auth, (req, res) => {
     sender: from,
     text,
     ts: Date.now(),
+    delivered_to: [to], // “доставлено” на сервер
   };
 
   messages.push(msg);
   writeJsonAtomic(MSG_PATH, messages);
 
+  // WAU: пушим событие в сокеты (если подключены)
+  io.to("user:" + to).emit("message:new", msg);
+  io.to("user:" + from).emit("message:new", msg);
+
   res.json({ ok: true, message: msg });
 });
 
-// === Смена username ===
-// body: { newUsername }
+// === rename username (как было раньше) ===
 app.post("/api/user/rename", auth, (req, res) => {
   const oldName = req.user.username;
   const newName = String(req.body?.newUsername || "").trim();
@@ -273,11 +289,9 @@ app.post("/api/user/rename", auth, (req, res) => {
   if (!users[oldName]) return res.status(404).json({ error: "user_not_found" });
   if (users[newName]) return res.status(409).json({ error: "username_taken" });
 
-  // rename user
   users[newName] = { ...users[oldName], username: newName };
   delete users[oldName];
 
-  // update messages: sender and chat ids
   const messages = readJson(MSG_PATH, []);
   for (const m of messages) {
     if (m.sender === oldName) m.sender = newName;
@@ -285,19 +299,65 @@ app.post("/api/user/rename", auth, (req, res) => {
     const parts = String(m.chat).split("|");
     if (parts.length === 2 && parts.includes(oldName)) {
       const other = parts[0] === oldName ? parts[1] : parts[0];
-      const arr = [newName, other].sort();
-      m.chat = `${arr[0]}|${arr[1]}`;
+      m.chat = chatIdFromUsers(newName, other);
     }
   }
 
   writeJsonAtomic(USERS_PATH, users);
   writeJsonAtomic(MSG_PATH, messages);
 
-  // new token
   const token = signToken({ u: newName, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
   res.json({ ok: true, username: newName, token });
 });
 
-app.listen(PORT, () => {
+// ---------- SOCKET.IO (WAU) ----------
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: true, credentials: true },
+});
+
+// online map: username -> count sockets
+const onlineCount = new Map();
+
+function setOnline(username, delta) {
+  const n = (onlineCount.get(username) || 0) + delta;
+  if (n <= 0) onlineCount.delete(username);
+  else onlineCount.set(username, n);
+  return onlineCount.has(username);
+}
+
+io.use((socket, next) => {
+  // токен можно передать как: socket.auth = { token }
+  const token = socket.handshake.auth?.token;
+  const payload = verifyToken(token);
+  if (!payload) return next(new Error("unauthorized"));
+  socket.user = { username: payload.u };
+  next();
+});
+
+io.on("connection", (socket) => {
+  const me = socket.user.username;
+
+  // отдельная “комната пользователя”
+  socket.join("user:" + me);
+
+  const becameOnline = setOnline(me, +1);
+  if (becameOnline) io.emit("presence", { username: me, online: true });
+
+  // клиент сообщает какой чат открыт (чтобы “печатает” было только туда)
+  socket.on("typing", ({ to, isTyping }) => {
+    const toU = String(to || "").trim();
+    if (!toU) return;
+    io.to("user:" + toU).emit("typing", { from: me, isTyping: !!isTyping });
+  });
+
+  socket.on("disconnect", () => {
+    const stillOnline = setOnline(me, -1);
+    if (!stillOnline) io.emit("presence", { username: me, online: false });
+  });
+});
+
+server.listen(PORT, () => {
   console.log(`Trix server running on http://localhost:${PORT}`);
 });
