@@ -1,15 +1,11 @@
 {
-  "TRIX Bot": {
-    "username": "TRIX Bot",
-    "salt": "2ec397b0e7d6fb8f9fcb8c1d1f6afe94",
-    "password_hash": "9b774e4fc867b26aac944c9800b0a62dc1615750f087039809139286daeeab37",
-    "created_at": 1768993797139
-  },
-  "чикатило": {
-    "username": "чикатило",
-    "salt": "54cdd0ef82c34270bd650ef1010029d9",
-    "password_hash": "628f1cf768df8a3708fa84bee6be4205a64e037a8d53fb9b78ae2664d31ae787",
-    "created_at": 1769044346685
+  "admin": {
+    "id": "admin",
+    "username": "admin",
+    "email": "admin@trix.com",
+    "password": "admin123",
+    "displayName": "Администратор",
+    "avatar": "/uploads/avatars/default.png",
+    "status": "online"
   }
-  
 }
